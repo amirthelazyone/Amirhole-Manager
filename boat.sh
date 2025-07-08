@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 ##############################################################################
 RATHOLE_DIR="/root/rathole-core"
-Amirhole_SCRIPT="/root/rathole_Amirhole.sh"
+Amirhole_SCRIPT="/root/boat.sh"
 Amirhole_SERVICE="rathole_Amirhole.service"
 LOGF="/var/log/rathole_manager.log"
 
