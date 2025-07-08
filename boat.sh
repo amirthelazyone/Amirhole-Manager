@@ -62,7 +62,7 @@ while true; do
     fi
   done
   [ $tot -gt 0 ] && echo "$(date) - $ok/$tot healthy" >>"$LOGF"
-  sleep 90
+  sleep 2
 done
 WDSH
 chmod +x "$Amirhole_SCRIPT"
