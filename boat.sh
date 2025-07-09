@@ -62,7 +62,7 @@ while true; do
     fi
   done
   [ $tot -gt 0 ] && echo "$(date) - $ok/$tot healthy" >>"$LOGF"
-  sleep 1
+  sleep 2
 done
 WDSH
 chmod +x "$Amirhole_SCRIPT"
@@ -112,7 +112,7 @@ cat <<'ASCII'
                                                
 ASCII
   echo -e "${RST}"
-  echo -e "${ORG}Version:${RST}  v1.4"
+  echo -e "${ORG}Version:${RST}  v2.1"
   echo -e "${ORG}Github:${RST}   github.com/amirthelazyone"
   echo -e "${ORG}Telegram:${RST} @edite909"
   echo -e "═══════════════════════════════════════════════"
