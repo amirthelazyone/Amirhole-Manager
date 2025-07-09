@@ -5,14 +5,18 @@ Amirhole_SCRIPT="/root/boat.sh"
 Amirhole_SERVICE="rathole_Amirhole.service"
 LOGF="/var/log/rathole_manager.log"
 
-if [ -t 1 ]; then RED=$'\e[31m'; GRN=$'\e[32m'; ORG=$'\e[33m'; CYN=$'\e[36m'; RST=$'\e[0m'; else RED=''; GRN=''; ORG=''; CYN=''; RST=''; fi
+if [ -t 1 ]; then
+  RED=$'\e[31m'; GRN=$'\e[32m'; ORG=$'\e[33m'; CYN=$'\e[36m'; RST=$'\e[0m'
+else
+  RED=''; GRN=''; ORG=''; CYN=''; RST=''
+fi
 info(){ echo -e "${GRN}$*${RST}" | tee -a "$LOGF"; }
 warn(){ echo -e "${ORG}$*${RST}" | tee -a "$LOGF"; }
 err() { echo -e "${RED}$*${RST}" | tee -a "$LOGF"; }
 
 configs(){ ls "$RATHOLE_DIR"/*.toml 2>/dev/null || true; }
 scripts(){ ls "$RATHOLE_DIR"/rathole-*.sh 2>/dev/null || true; }
-extract_ports(){ grep -Eo '\[server\.services\.[0-9]+' "$1"|grep -Eo '[0-9]+'; grep -E 'bind_addr' "$1"|grep -Eo ':[0-9]+'|tr -d ':'; }
+extract_ports(){ grep -Eo '\[server\.services\.[0-9]+' "$1" | grep -Eo '[0-9]+'; grep -E 'bind_addr' "$1" | grep -Eo ':[0-9]+' | tr -d ':'; }
 all_ports(){ for f in $(configs); do extract_ports "$f"; done | sort -u; }
 
 kill_ratholes(){ pkill -TERM -f "$RATHOLE_DIR/rathole" 2>/dev/null || true; sleep 0.1; pkill -9 -f "$RATHOLE_DIR/rathole" 2>/dev/null || true; }
@@ -44,29 +48,29 @@ T_PING=${T_PING:-0.4}
 renice -n 15 $$ &>/dev/null
 RATHOLE_DIR="/root/rathole-core"
 LOGF="/var/log/rathole_manager.log"
-parse_ports(){ grep -Eo '\[server\.services\.[0-9]+' "\$1"|grep -Eo '[0-9]+'; grep -E 'bind_addr' "\$1"|grep -Eo ':[0-9]+'|tr -d ':'; }
-all_ports(){ for f in "\$RATHOLE_DIR"/*.toml; do [ -f "\$f" ] && parse_ports "\$f"; done | sort -u; }
+parse_ports(){ grep -Eo '\[server\.services\.[0-9]+' "$1" | grep -Eo '[0-9]+'; grep -E 'bind_addr' "$1" | grep -Eo ':[0-9]+' | tr -d ':'; }
+all_ports(){ for f in "$RATHOLE_DIR"/*.toml; do [ -f "$f" ] && parse_ports "$f"; done | sort -u; }
 restart_all(){
-  pkill -TERM -f "\$RATHOLE_DIR/rathole" 2>/dev/null || true; sleep 0.1
-  pkill -9   -f "\$RATHOLE_DIR/rathole" 2>/dev/null || true
-  for f in "\$RATHOLE_DIR"/*.toml; do
-    [ -f "\$f" ] && (nohup nice -n 10 "\$RATHOLE_DIR/rathole" "\$f" >>"\$LOGF" 2>&1 & disown)
+  pkill -TERM -f "$RATHOLE_DIR/rathole" 2>/dev/null || true; sleep 0.1
+  pkill -9   -f "$RATHOLE_DIR/rathole" 2>/dev/null || true
+  for f in "$RATHOLE_DIR"/*.toml; do
+    [ -f "$f" ] && (nohup nice -n 10 "$RATHOLE_DIR/rathole" "$f" >>"$LOGF" 2>&1 & disown)
   done
-  echo "\$(date) - restart successful" >>"\$LOGF"
+  echo "$(date) - restart successful" >>"$LOGF"
 }
 while true; do
   ok=0 tot=0
-  for p in \$(all_ports); do
+  for p in $(all_ports); do
     ((tot++))
-    if timeout "\$T_PING" bash -c "</dev/tcp/127.0.0.1/\$p" &>/dev/null; then
+    if timeout "$T_PING" bash -c "</dev/tcp/127.0.0.1/$p" &>/dev/null; then
       ((ok++))
     else
-      echo "\$(date) - port \$p DOWN → restart" >>"\$LOGF"
+      echo "$(date) - port $p DOWN → restart" >>"$LOGF"
       restart_all; break
     fi
   done
-  [ \$tot -gt 0 ] && echo "\$(date) - \$ok/\$tot healthy" >>"\$LOGF"
-  sleep "\$INTERVAL"
+  [ $tot -gt 0 ] && echo "$(date) - $ok/$tot healthy" >>"$LOGF"
+  sleep "$INTERVAL"
 done
 WDSH
 chmod +x "$Amirhole_SCRIPT"
@@ -101,12 +105,18 @@ restart_all_wrapped(){ sudo systemctl restart "$Amirhole_SERVICE"; spawn_rathole
 edit_service(){ sudo ${EDITOR:-nano} /etc/systemd/system/"$Amirhole_SERVICE"; sudo systemctl daemon-reload; }
 
 CACHE_LOC=""; CACHE_ISP=""
-get_geo(){ read L I < <(curl -s --max-time 3 'http://ip-api.com/line/?fields=country,isp'|tr '\n' ' '); [ -n "$L" ] && CACHE_LOC=$L; [ -n "$I" ] && CACHE_ISP=$I; }
+get_geo(){ read L I < <(curl -s --max-time 3 'http://ip-api.com/line/?fields=country,isp' | tr '\n' ' '); [ -n "$L" ] && CACHE_LOC=$L; [ -n "$I" ] && CACHE_ISP=$I; }
 
 banner(){
   [ -t 1 ] || return
   get_geo
-  systemctl is-active "$Amirhole_SERVICE" &>/dev/null && ST="${GRN}Active${RST}" || ST="${RED}Inactive${RST}"
+  if systemctl is-active --quiet "$Amirhole_SERVICE"; then
+    ST="${GRN}Running${RST}"
+  elif systemctl is-enabled --quiet "$Amirhole_SERVICE"; then
+    ST="${ORG}Installed${RST}"
+  else
+    ST="${RED}Not-installed${RST}"
+  fi
   clear
   echo -e "${CYN}"
 cat <<'ASCII'
