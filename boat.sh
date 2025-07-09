@@ -5,21 +5,17 @@ Amirhole_SCRIPT="/root/boat.sh"
 Amirhole_SERVICE="rathole_Amirhole.service"
 LOGF="/var/log/rathole_manager.log"
 
-if [ -t 1 ]; then
-  RED=$'\e[31m'; GRN=$'\e[32m'; ORG=$'\e[33m'; CYN=$'\e[36m'; RST=$'\e[0m'
-else
-  RED=''; GRN=''; ORG=''; CYN=''; RST=''
-fi
+if [ -t 1 ]; then RED=$'\e[31m'; GRN=$'\e[32m'; ORG=$'\e[33m'; CYN=$'\e[36m'; RST=$'\e[0m'; else RED=''; GRN=''; ORG=''; CYN=''; RST=''; fi
 info(){ echo -e "${GRN}$*${RST}" | tee -a "$LOGF"; }
 warn(){ echo -e "${ORG}$*${RST}" | tee -a "$LOGF"; }
 err() { echo -e "${RED}$*${RST}" | tee -a "$LOGF"; }
 
 configs(){ ls "$RATHOLE_DIR"/*.toml 2>/dev/null || true; }
 scripts(){ ls "$RATHOLE_DIR"/rathole-*.sh 2>/dev/null || true; }
-extract_ports(){ grep -Eo '\[server\.services\.[0-9]+' "$1" | grep -Eo '[0-9]+'; grep -E 'bind_addr' "$1" | grep -Eo ':[0-9]+' | tr -d ':'; }
+extract_ports(){ grep -Eo '\[server\.services\.[0-9]+' "$1"|grep -Eo '[0-9]+'; grep -E 'bind_addr' "$1"|grep -Eo ':[0-9]+'|tr -d ':'; }
 all_ports(){ for f in $(configs); do extract_ports "$f"; done | sort -u; }
 
-kill_ratholes(){ pkill -TERM -f "$RATHOLE_DIR/rathole" 2>/dev/null || true; sleep 0.1; pkill -9 -f "$RATHOLE_DIR/rathole" 2>/dev/null || true; }
+kill_ratholes(){ pkill -TERM -f "$RATHOLE_DIR/rathole" 2>/dev/null || true; sleep 0.4; pkill -9 -f "$RATHOLE_DIR/rathole" 2>/dev/null || true; }
 
 spawn_ratholes(){
   kill_ratholes
@@ -28,14 +24,14 @@ spawn_ratholes(){
     port=$(extract_ports "$cfg" | head -n1)
     info "[$idx/$total] starting $(basename "$cfg") (port $port)"
     nohup nice -n 10 "$RATHOLE_DIR/rathole" "$cfg" >>"$LOGF" 2>&1 & disown
-    ((idx++)); sleep 0.05
+    ((idx++)); sleep 0.25
   done
   for s in $(scripts); do
     pgrep -f "$s" >/dev/null && continue
     [ -x "$s" ] || chmod +x "$s"
     info "launching $(basename "$s")"
     nohup "$s" >>"$LOGF" 2>&1 & disown
-    sleep 0.05
+    sleep 0.15
   done
   info "restart successful"
 }
@@ -43,15 +39,12 @@ spawn_ratholes(){
 install_Amirhole(){
 cat > "$Amirhole_SCRIPT" <<'WDSH'
 #!/usr/bin/env bash
-INTERVAL=${INTERVAL:-0.4}
-T_PING=${T_PING:-0.4}
-renice -n 15 $$ &>/dev/null
 RATHOLE_DIR="/root/rathole-core"
 LOGF="/var/log/rathole_manager.log"
-parse_ports(){ grep -Eo '\[server\.services\.[0-9]+' "$1" | grep -Eo '[0-9]+'; grep -E 'bind_addr' "$1" | grep -Eo ':[0-9]+' | tr -d ':'; }
+parse_ports(){ grep -Eo '\[server\.services\.[0-9]+' "$1"|grep -Eo '[0-9]+'; grep -E 'bind_addr' "$1"|grep -Eo ':[0-9]+'|tr -d ':'; }
 all_ports(){ for f in "$RATHOLE_DIR"/*.toml; do [ -f "$f" ] && parse_ports "$f"; done | sort -u; }
 restart_all(){
-  pkill -TERM -f "$RATHOLE_DIR/rathole" 2>/dev/null || true; sleep 0.1
+  pkill -TERM -f "$RATHOLE_DIR/rathole" 2>/dev/null || true; sleep 0.4
   pkill -9   -f "$RATHOLE_DIR/rathole" 2>/dev/null || true
   for f in "$RATHOLE_DIR"/*.toml; do
     [ -f "$f" ] && (nohup nice -n 10 "$RATHOLE_DIR/rathole" "$f" >>"$LOGF" 2>&1 & disown)
@@ -62,15 +55,14 @@ while true; do
   ok=0 tot=0
   for p in $(all_ports); do
     ((tot++))
-    if timeout "$T_PING" bash -c "</dev/tcp/127.0.0.1/$p" &>/dev/null; then
-      ((ok++))
+    if timeout 4 bash -c "</dev/tcp/127.0.0.1/$p" &>/dev/null; then ((ok++))
     else
       echo "$(date) - port $p DOWN → restart" >>"$LOGF"
       restart_all; break
     fi
   done
   [ $tot -gt 0 ] && echo "$(date) - $ok/$tot healthy" >>"$LOGF"
-  sleep "$INTERVAL"
+  sleep 0.5
 done
 WDSH
 chmod +x "$Amirhole_SCRIPT"
@@ -81,11 +73,9 @@ Description=Rathole Amirhole
 After=network.target
 [Service]
 Type=simple
-Environment=INTERVAL=0.4
-Environment=T_PING=0.4
 ExecStart=/usr/bin/env bash $Amirhole_SCRIPT
 Restart=always
-RestartSec=0
+RestartSec=10
 KillMode=mixed
 StandardOutput=append:$LOGF
 StandardError=append:$LOGF
@@ -105,18 +95,12 @@ restart_all_wrapped(){ sudo systemctl restart "$Amirhole_SERVICE"; spawn_rathole
 edit_service(){ sudo ${EDITOR:-nano} /etc/systemd/system/"$Amirhole_SERVICE"; sudo systemctl daemon-reload; }
 
 CACHE_LOC=""; CACHE_ISP=""
-get_geo(){ read L I < <(curl -s --max-time 3 'http://ip-api.com/line/?fields=country,isp' | tr '\n' ' '); [ -n "$L" ] && CACHE_LOC=$L; [ -n "$I" ] && CACHE_ISP=$I; }
+get_geo(){ read L I < <(curl -s --max-time 3 'http://ip-api.com/line/?fields=country,isp'|tr '\n' ' '); [ -n "$L" ] && CACHE_LOC=$L; [ -n "$I" ] && CACHE_ISP=$I; }
 
 banner(){
   [ -t 1 ] || return
   get_geo
-  if systemctl is-active --quiet "$Amirhole_SERVICE"; then
-    ST="${GRN}Running${RST}"
-  elif systemctl is-enabled --quiet "$Amirhole_SERVICE"; then
-    ST="${ORG}Installed${RST}"
-  else
-    ST="${RED}Not-installed${RST}"
-  fi
+  systemctl is-active "$Amirhole_SERVICE" &>/dev/null && ST="${GRN}Active${RST}" || ST="${RED}Inactive${RST}"
   clear
   echo -e "${CYN}"
 cat <<'ASCII'
@@ -128,7 +112,7 @@ cat <<'ASCII'
                                                
 ASCII
   echo -e "${RST}"
-  echo -e "${ORG}Version:${RST}  v1.3-fast"
+  echo -e "${ORG}Version:${RST}  v1.3"
   echo -e "${ORG}Github:${RST}   github.com/amirthelazyone"
   echo -e "${ORG}Telegram:${RST} @edite909"
   echo -e "═══════════════════════════════════════════════"
