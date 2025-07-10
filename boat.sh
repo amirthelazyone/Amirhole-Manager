@@ -112,7 +112,7 @@ cat <<'ASCII'
                                                
 ASCII
   echo -e "${RST}"
-  echo -e "${ORG}Version:${RST}  v2.1"
+  echo -e "${ORG}Version:${RST}  v2.2"
   echo -e "${ORG}Github:${RST}   github.com/amirthelazyone"
   echo -e "${ORG}Telegram:${RST} @edite909"
   echo -e "═══════════════════════════════════════════════"
